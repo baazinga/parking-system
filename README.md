@@ -59,7 +59,7 @@ parking-system/
 │       └── best.pt
 ├── report.tex
 └── README.md
-```text
+```
 
 ## 本地运行方法
 
@@ -69,14 +69,14 @@ parking-system/
 python3 -m venv venv
 source venv/bin/activate
 pip install flask easyocr opencv-python pillow numpy ultralytics certifi
-```bash
+```
 
 ### 2.启动项目
 
 ```bash
 cd server
 python3 app.py
-```bash
+```
 
 ## 云服务器部署说明
 本项目已在阿里云 Ubuntu 22.04 云服务器上完成部署与测试，可通过公网 121.41.121.45 访问。
@@ -90,4 +90,4 @@ Flask 监听地址为 0.0.0.0
 cd /root/parking-system/server
 source /root/parking-system/venv/bin/activate
 python3 app.py
-```bash
+```
