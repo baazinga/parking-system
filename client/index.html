@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>模拟停车场出入场系统</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f3f6fb;
+        margin: 0;
+        padding: 24px;
+        color: #1f2328;
+      }
+
+      .container {
+        max-width: 760px;
+        margin: 0 auto;
+      }
+
+      .card {
+        background: #ffffff;
+        border-radius: 16px;
+        padding: 24px;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+      }
+
+      h1 {
+        margin-top: 0;
+        font-size: 28px;
+      }
+
+      p {
+        color: #57606a;
+      }
+
+      input[type="file"] {
+        margin: 12px 0 16px;
+      }
+
+      .actions {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+      }
+
+      button {
+        padding: 12px 18px;
+        border: none;
+        border-radius: 10px;
+        cursor: pointer;
+        font-size: 15px;
+      }
+
+      .entry-btn {
+        background: #1f883d;
+        color: white;
+      }
+
+      .exit-btn {
+        background: #d1242f;
+        color: white;
+      }
+
+      .preview {
+        margin-top: 16px;
+        margin-bottom: 20px;
+      }
+
+      .preview img {
+        max-width: 100%;
+        max-height: 320px;
+        border-radius: 12px;
+        border: 1px solid #d0d7de;
+      }
+
+      .result-box {
+        background: #f6f8fa;
+        border-radius: 12px;
+        padding: 16px;
+        white-space: pre-wrap;
+        word-break: break-word;
+        min-height: 120px;
+      }
+
+      .status {
+        margin-bottom: 10px;
+        font-weight: 600;
+      }
+
+      .success {
+        color: #1a7f37;
+      }
+
+      .error {
+        color: #cf222e;
+      }
+
+      #recordsBtn {
+        background: #57606a;
+        color: white;
+      }
+
+      #updateSpacesBtn {
+        background: #0969da;
+        color: white;
+      }
+
+
+
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="card">
+        <h1>模拟停车场出入场系统</h1>
+        
+        <p><a href="/admin">进入管理员页面</a></p>
+
+        <p>请拍摄或选择车牌图片，然后点击“车辆入场”或“车辆出场”。</p>
+
+        <input id="imageInput" type="file" accept="image/*" />
+
+        <div id="spaceInfo" class="result-box" style="margin-bottom: 20px;">
+          正在加载车位信息...
+        </div>
+
+        <div class="actions">
+          <button id="entryBtn" class="entry-btn">车辆入场</button>
+          <button id="exitBtn" class="exit-btn">车辆出场</button>
+        </div>
+
+        <div class="preview">
+          <img id="previewImage" alt="图片预览" style="display: none;" />
+        </div>
+
+        <div id="statusText" class="status">当前状态：等待上传</div>
+        <div id="result" class="result-box">还没有返回结果</div>
+      </div>
+    </div>
+
+    <script>
+      const imageInput = document.getElementById("imageInput");
+      const entryBtn = document.getElementById("entryBtn");
+      const exitBtn = document.getElementById("exitBtn");
+      const previewImage = document.getElementById("previewImage");
+      const statusText = document.getElementById("statusText");
+      const result = document.getElementById("result");
+
+      const spaceInfo = document.getElementById("spaceInfo");
+      const totalSpacesInput = document.getElementById("totalSpacesInput");
+
+
+
+      imageInput.addEventListener("change", () => {
+        const file = imageInput.files[0];
+        console.log("selected file:", imageInput.files[0]);
+        if (!file) {
+          previewImage.style.display = "none";
+          return;
+        }
+
+        const imageUrl = URL.createObjectURL(file);
+        previewImage.src = imageUrl;
+        previewImage.style.display = "block";
+      });
+
+      function showResult(data) {
+        const lines = [];
+
+        lines.push(`success: ${data.success}`);
+        if (data.action) lines.push(`action: ${data.action}`);
+        if (data.message) lines.push(`message: ${data.message}`);
+        if (data.plate_number) lines.push(`plate_number: ${data.plate_number}`);
+        if (data.entry_time) lines.push(`entry_time: ${data.entry_time}`);
+        if (data.exit_time) lines.push(`exit_time: ${data.exit_time}`);
+        if (data.duration_minutes !== undefined) lines.push(`duration_minutes: ${data.duration_minutes}`);
+        if (data.fee !== undefined) lines.push(`fee: ${data.fee}`);
+        if (data.saved_as) lines.push(`saved_as: ${data.saved_as}`);
+
+        result.textContent = lines.join("\n");
+      }
+
+      async function uploadTo(url, actionText) {
+        if (!imageInput.files.length) {
+          statusText.textContent = "当前状态：请先选择一张图片";
+          statusText.className = "status error";
+          result.textContent = "未选择图片";
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append("image", imageInput.files[0]);
+
+        statusText.textContent = `当前状态：正在执行${actionText}...`;
+        statusText.className = "status";
+        result.textContent = "请求发送中，请稍候...";
+
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            body: formData,
+          });
+
+          const contentType = response.headers.get("content-type") || "";
+
+          if (!contentType.includes("application/json")) {
+            const text = await response.text();
+            statusText.textContent = `当前状态：${actionText}失败`;
+            statusText.className = "status error";
+            result.textContent = `服务器没有返回 JSON。\n\n${text}`;
+            return;
+          }
+
+          const data = await response.json();
+          showResult(data);
+
+
+          if (response.ok && data.success) {
+            statusText.textContent = `当前状态：${actionText}成功`;
+            statusText.className = "status success";
+            loadSpaceStatus();
+          } else {
+            statusText.textContent = `当前状态：${actionText}失败`;
+            statusText.className = "status error";
+          }
+        } catch (error) {
+          statusText.textContent = `当前状态：${actionText}失败`;
+          statusText.className = "status error";
+          result.textContent = `请求失败: ${error.message}`;
+        }
+      }
+
+      
+
+    async function loadSpaceStatus() {
+      try {
+        const response = await fetch("/api/space-status");
+        const data = await response.json();
+
+        if (data.success) {
+          spaceInfo.textContent =
+            `总车位: ${data.total_spaces}\n` +
+            `已占用: ${data.occupied_spaces}\n` +
+            `剩余车位: ${data.available_spaces}`;
+        } else {
+          spaceInfo.textContent = "车位信息加载失败";
+        }
+      } catch (error) {
+        spaceInfo.textContent = `车位信息加载失败: ${error.message}`;
+      }
+    }
+
+      entryBtn.addEventListener("click", () => uploadTo("/api/entry", "入场"));
+      exitBtn.addEventListener("click", () => uploadTo("/api/exit", "出场"));
+
+    loadSpaceStatus();
+  
+    </script>
+  </body>
+</html>

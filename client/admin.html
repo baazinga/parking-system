@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>管理员后台</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f3f6fb;
+        margin: 0;
+        padding: 24px;
+        color: #1f2328;
+      }
+
+      .container {
+        max-width: 900px;
+        margin: 0 auto;
+      }
+
+      .card {
+        background: #ffffff;
+        border-radius: 16px;
+        padding: 24px;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+      }
+
+      h1 {
+        margin-top: 0;
+        font-size: 28px;
+      }
+
+      .actions {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin: 16px 0 20px;
+      }
+
+      button {
+        padding: 12px 18px;
+        border: none;
+        border-radius: 10px;
+        cursor: pointer;
+        font-size: 15px;
+        color: white;
+      }
+
+      #recordsBtn {
+        background: #57606a;
+      }
+
+
+      #updateSpacesBtn {
+        background: #0969da;
+      }
+
+      input[type="number"] {
+        padding: 10px 12px;
+        border: 1px solid #d0d7de;
+        border-radius: 10px;
+        font-size: 14px;
+        margin-right: 8px;
+      }
+
+      .result-box {
+        background: #f6f8fa;
+        border-radius: 12px;
+        padding: 16px;
+        white-space: pre-wrap;
+        word-break: break-word;
+        min-height: 100px;
+        margin-bottom: 20px;
+      }
+
+      .status {
+        margin-bottom: 10px;
+        font-weight: 600;
+      }
+
+      .success {
+        color: #1a7f37;
+      }
+
+      .error {
+        color: #cf222e;
+      }
+
+      a {
+        color: #0969da;
+        text-decoration: none;
+      }
+
+      #exportBtn {
+        background: #1a7f37;
+      }
+
+      #updateFeeBtn {
+        background: #8250df;
+      }
+
+
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="card">
+        <h1>管理员后台</h1>
+        <p>
+            <a href="/">返回用户页面</a> |
+            <a href="/logout">退出登录</a>
+        </p>
+
+
+        <div id="dashboardInfo" class="result-box">正在加载系统统计信息...</div>
+
+        <div style="margin-bottom: 20px;">
+          <input id="totalSpacesInput" type="number" placeholder="设置总车位数" />
+          <button id="updateSpacesBtn">更新车位数</button>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+            <input id="hourlyRateInput" type="number" step="0.1" placeholder="设置每小时收费标准" />
+            <button id="updateFeeBtn">更新收费标准</button>
+        </div>
+
+
+        <div class="actions">
+          <button id="recordsBtn">查看记录</button>
+          <button id="exportBtn">导出CSV</button>
+        </div>
+
+        <div id="statusText" class="status">当前状态：等待操作</div>
+        <div id="result" class="result-box">还没有返回结果</div>
+      </div>
+    </div>
+
+    <script>
+      const dashboardInfo = document.getElementById("dashboardInfo");
+      const spaceInfo = document.getElementById("spaceInfo");
+      const totalSpacesInput = document.getElementById("totalSpacesInput");
+      const updateSpacesBtn = document.getElementById("updateSpacesBtn");
+      const recordsBtn = document.getElementById("recordsBtn");
+      const statusText = document.getElementById("statusText");
+      const result = document.getElementById("result");
+      const exportBtn = document.getElementById("exportBtn");
+      const hourlyRateInput = document.getElementById("hourlyRateInput");
+      const updateFeeBtn = document.getElementById("updateFeeBtn");
+
+
+
+      function showResult(data) {
+        const lines = [];
+
+        for (const [key, value] of Object.entries(data)) {
+          if (Array.isArray(value)) continue;
+          lines.push(`${key}: ${value}`);
+        }
+
+        result.textContent = lines.join("\n");
+      }
+
+      async function loadDashboard() {
+        try {
+          const response = await fetch("/api/dashboard");
+          const data = await response.json();
+
+          if (!data.success) {
+            dashboardInfo.textContent = "系统统计信息加载失败";
+            return;
+          }
+
+          dashboardInfo.textContent =
+                `总记录数: ${data.total_records}\n` +
+                `当前在场车辆: ${data.cars_in_lot}\n` +
+                `已完成出场: ${data.completed_exits}\n` +
+                `总收入: ${data.total_revenue} 元\n` +
+                `当前费率: ${data.hourly_rate} 元/小时\n` +
+                `总车位: ${data.total_spaces}\n` +
+                `已占用车位: ${data.occupied_spaces}\n` +
+                `剩余车位: ${data.available_spaces}`;
+
+        } catch (error) {
+          dashboardInfo.textContent = `系统统计信息加载失败: ${error.message}`;
+        }
+      }
+
+      async function loadSpaceStatus() {
+        try {
+          const response = await fetch("/api/space-status");
+          const data = await response.json();
+
+          if (data.success) {
+            spaceInfo.textContent =
+              `总车位: ${data.total_spaces}\n` +
+              `已占用: ${data.occupied_spaces}\n` +
+              `剩余车位: ${data.available_spaces}`;
+          } else {
+            spaceInfo.textContent = "车位信息加载失败";
+          }
+        } catch (error) {
+          spaceInfo.textContent = `车位信息加载失败: ${error.message}`;
+        }
+      }
+
+      async function loadRecords() {
+        statusText.textContent = "当前状态：正在加载记录...";
+        statusText.className = "status";
+        result.textContent = "正在读取数据库记录...";
+
+        try {
+          const response = await fetch("/api/records");
+          const data = await response.json();
+
+          if (!data.success) {
+            statusText.textContent = "当前状态：加载记录失败";
+            statusText.className = "status error";
+            result.textContent = JSON.stringify(data, null, 2);
+            return;
+          }
+
+          if (!data.records.length) {
+            statusText.textContent = "当前状态：暂无记录";
+            statusText.className = "status";
+            result.textContent = "数据库中还没有停车记录";
+            return;
+          }
+
+          const lines = data.records.map((record, index) => {
+            return [
+              `id: ${record.id}`,
+              `plate_number: ${record.plate_number}`,
+              `entry_time: ${record.entry_time}`,
+              `exit_time: ${record.exit_time || "未出场"}`,
+              `duration_minutes: ${record.duration_minutes ?? "暂无"}`,
+              `fee: ${record.fee ?? "暂无"}`,
+              `status: ${record.status}`,
+              "------------------------------",
+            ].join("\n");
+          });
+
+          statusText.textContent = `当前状态：共加载 ${data.count} 条记录`;
+          statusText.className = "status success";
+          result.textContent = lines.join("\n");
+        } catch (error) {
+          statusText.textContent = "当前状态：加载记录失败";
+          statusText.className = "status error";
+          result.textContent = `请求失败: ${error.message}`;
+        }
+      }
+    
+
+      async function updateTotalSpaces() {
+        const value = totalSpacesInput.value.trim();
+
+        if (!value) {
+          statusText.textContent = "当前状态：请输入总车位数";
+          statusText.className = "status error";
+          return;
+        }
+
+        try {
+          const response = await fetch("/api/space-status", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              total_spaces: Number(value),
+            }),
+          });
+
+          const data = await response.json();
+          showResult(data);
+
+          if (response.ok && data.success) {
+            statusText.textContent = "当前状态：车位数更新成功";
+            statusText.className = "status success";
+            totalSpacesInput.value = "";
+            loadSpaceStatus();
+            loadDashboard();
+          } else {
+            statusText.textContent = "当前状态：车位数更新失败";
+            statusText.className = "status error";
+          }
+        } catch (error) {
+          statusText.textContent = "当前状态：车位数更新失败";
+          statusText.className = "status error";
+          result.textContent = `请求失败: ${error.message}`;
+        }
+      }
+
+      function exportRecords() {
+        window.location.href = "/api/export-records";
+        }
+
+    async function updateFeeRate() {
+        const value = hourlyRateInput.value.trim();
+
+        if (!value) {
+            statusText.textContent = "当前状态：请输入收费标准";
+            statusText.className = "status error";
+            return;
+        }
+
+        try {
+            const response = await fetch("/api/fee-rate", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                hourly_rate: Number(value),
+            }),
+            });
+
+            const data = await response.json();
+            showResult(data);
+
+            if (response.ok && data.success) {
+                statusText.textContent = "当前状态：收费标准更新成功";
+                statusText.className = "status success";
+                hourlyRateInput.value = "";
+                loadDashboard();
+                loadSpaceStatus();
+            } else {
+                statusText.textContent = "当前状态：收费标准更新失败";
+                statusText.className = "status error";
+            }
+        } catch (error) {
+            statusText.textContent = "当前状态：收费标准更新失败";
+            statusText.className = "status error";
+            result.textContent = `请求失败: ${error.message}`;
+        }
+        }
+
+
+
+      recordsBtn.addEventListener("click", loadRecords);
+      updateSpacesBtn.addEventListener("click", updateTotalSpaces);
+      exportBtn.addEventListener("click", exportRecords);
+      updateFeeBtn.addEventListener("click", updateFeeRate);
+
+
+      loadSpaceStatus();
+      loadDashboard();
+    </script>
+  </body>
+</html>
